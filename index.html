@@ -143,7 +143,7 @@ const $ = id => document.getElementById(id);
 const MAX=600;
 let mode='yt', delay=0, vidKey='', volume=100;
 let vp=null, ap=null, vReady=false, aReady=false, apiReady=false, pendingId=null;
-let audioOk=false, holdingForAudio=false, lastSeekAt=0, blockedSince=0;
+let audioOk=false, holdingForAudio=false, lastSeekAt=0, blockedSince=0, lead=0.1, justSeeked=false;
 const fv=$('fv'), fa=$('fa');
 
 const parseId=u=>{ u=(u||'').trim(); if(/^[\w-]{11}$/.test(u)) return u;
@@ -180,7 +180,7 @@ function loadYt(id){
   const base={playsinline:1,rel:0,iv_load_policy:3,origin:location.origin};
   vp=new YT.Player('vidHost',{videoId:id,playerVars:Object.assign({controls:1,fs:1},base),events:{
     onReady:()=>{vReady=true; vp.mute(); showTitle();},
-    onStateChange:e=>{ if(e.data===1||e.data===5) showTitle(); tick(true); },
+    onStateChange:e=>{ if(e.data===1||e.data===5) showTitle(); if(e.data!==1) tick(false); },
     onPlaybackRateChange:e=>{ aReady&&ap.setPlaybackRate(e.data); }
   }});
   ap=new YT.Player('audHost',{videoId:id,width:220,height:124,playerVars:Object.assign({controls:1,fs:0,disablekb:1},base),events:{
@@ -213,7 +213,7 @@ function tick(force){
     if(!vp.isMuted()){ volume=vp.getVolume()||volume; $('vol').value=volume; ap.setVolume(volume); ap.unMute(); vp.mute(); }
     const vs=vp.getPlayerState(), as=ap.getPlayerState();
     const T=vp.getCurrentTime(), D=vp.getDuration(), tgt=T-delay;
-    const vPlaying = vs===1 || (vs===3) || holdingForAudio;
+    const vPlaying = vs===1 || vs===3;
     if(vp.getPlaybackRate()!==ap.getPlaybackRate()) ap.setPlaybackRate(vp.getPlaybackRate());
     if(!vPlaying){
       if(as===1||as===3) ap.pauseVideo();
@@ -222,17 +222,18 @@ function tick(force){
       state='Paused';
     } else if(tgt<0 || (D && tgt>=D)){
       if(as===1) ap.pauseVideo();
-      if(holdingForAudio){ holdingForAudio=false; vp.playVideo(); }
       state= tgt<0 ? 'Audio starts in '+(-tgt).toFixed(0)+'s' : 'Audio ended'; cls='warn';
     } else if(vs===3){
       if(as===1) ap.pauseVideo(); state='Loading video'; cls='warn';
     } else {
-      if(as===3 && vs===1 && !holdingForAudio){ vp.pauseVideo(); holdingForAudio=true; }
-      if(holdingForAudio && as===1){ holdingForAudio=false; vp.playVideo(); }
-      if(as!==1 && as!==3){ ap.seekTo(tgt,true); ap.playVideo(); }
+      // never touch the visible player; only the hidden audio player is moved
+      const now=performance.now();
+      if(as!==1 && as!==3){ if(now-lastSeekAt>1500){ ap.seekTo(tgt+lead,true); lastSeekAt=now; } ap.playVideo(); }
       else if(as===1){
-        drift=ap.getCurrentTime()-tgt; const now=performance.now();
-        if((Math.abs(drift)>0.3||force) && now-lastSeekAt>1500){ ap.seekTo(tgt+0.08,true); lastSeekAt=now; }
+        drift=ap.getCurrentTime()-tgt;
+        if(justSeeked && now-lastSeekAt>1200){ lead=Math.max(0,Math.min(1.5,lead-drift)); justSeeked=false; }
+        const gap=Math.abs(drift)>2?1000:3000;
+        if((Math.abs(drift)>0.45||force) && now-lastSeekAt>gap){ ap.seekTo(tgt+lead,true); lastSeekAt=now; justSeeked=true; }
       }
       if(as===1){ state='Synced'; cls='ok'; } else { state='Loading audio'; cls='warn'; }
       if(!audioOk && as!==1 && as!==3){
@@ -250,7 +251,7 @@ function tick(force){
     else{
       if(fa.paused){ fa.currentTime=tgt; fa.play().catch(()=>{ state='Sound blocked'; }); }
       drift=fa.currentTime-tgt;
-      if(Math.abs(drift)>0.15||force){ fa.currentTime=tgt; }
+      if((Math.abs(drift)>0.3||force) && performance.now()-lastSeekAt>2000){ fa.currentTime=tgt; lastSeekAt=performance.now(); }
       state='Synced'; cls='ok';
     }
   }
@@ -258,7 +259,7 @@ function tick(force){
   $('driftTxt').textContent= drift!==null ? Math.round(Math.abs(drift)*1000)+' ms' : '';
 }
 setInterval(()=>tick(false),300);
-['play','pause','seeked','ratechange','volumechange'].forEach(ev=>fv.addEventListener(ev,()=>tick(true)));
+['play','pause','seeked','ratechange','volumechange'].forEach(ev=>fv.addEventListener(ev,()=>{lastSeekAt=0; tick(true);}));
 
 /* ---------- unlock (phones block sound until a tap) ---------- */
 const audioHost=$('audioHost');
