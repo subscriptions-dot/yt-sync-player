@@ -232,8 +232,8 @@ function tick(force){
       else if(as===1){
         drift=ap.getCurrentTime()-tgt;
         if(justSeeked && now-lastSeekAt>1200){ lead=Math.max(0,Math.min(1.5,lead-drift)); justSeeked=false; }
-        const gap=Math.abs(drift)>2?1000:3000;
-        if((Math.abs(drift)>0.45||force) && now-lastSeekAt>gap){ ap.seekTo(tgt+lead,true); lastSeekAt=now; justSeeked=true; }
+        const gap=Math.abs(drift)>2?1000:4000;
+        if((Math.abs(drift)>0.15||force) && now-lastSeekAt>gap){ ap.seekTo(tgt+lead,true); lastSeekAt=now; justSeeked=true; }
       }
       if(as===1){ state='Synced'; cls='ok'; } else { state='Loading audio'; cls='warn'; }
       if(!audioOk && as!==1 && as!==3){
