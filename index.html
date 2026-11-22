@@ -143,7 +143,7 @@ const $ = id => document.getElementById(id);
 const MAX=600;
 let mode='yt', delay=0, vidKey='', volume=100;
 let vp=null, ap=null, vReady=false, aReady=false, apiReady=false, pendingId=null;
-let audioOk=false, holdingForAudio=false, lastSeekAt=0, blockedSince=0, lead=0.1, justSeeked=false;
+let urlDelay=null, audioOk=false, holdingForAudio=false, lastSeekAt=0, blockedSince=0, lead=0.1, justSeeked=false;
 const fv=$('fv'), fa=$('fa');
 
 const parseId=u=>{ u=(u||'').trim(); if(/^[\w-]{11}$/.test(u)) return u;
@@ -175,7 +175,9 @@ function loadYt(id){
   if(!apiReady){ pendingId=id; ensureApi(); return; }
   pendingId=null; stopFile(); mode='yt'; vidKey=id; audioOk=false; holdingForAudio=false;
   $('empty').hidden=true; $('vtitle').hidden=true;
-  const saved=store.get('sp_d_'+id); setDelay(saved!==null?+saved:delay,false); updateUrl();
+  const saved=store.get('sp_d_'+id);
+  if(urlDelay!==null){ setDelay(urlDelay,true); urlDelay=null; } else setDelay(saved!==null?+saved:delay,false);
+  updateUrl();
   if(vp){ vp.cueVideoById(id); ap.cueVideoById(id); setTimeout(showTitle,1500); return; }
   const base={playsinline:1,rel:0,iv_load_policy:3,origin:location.origin};
   vp=new YT.Player('vidHost',{videoId:id,playerVars:Object.assign({controls:1,fs:1},base),events:{
@@ -183,7 +185,7 @@ function loadYt(id){
     onStateChange:e=>{ if(e.data===1||e.data===5) showTitle(); if(e.data!==1) tick(false); },
     onPlaybackRateChange:e=>{ aReady&&ap.setPlaybackRate(e.data); }
   }});
-  ap=new YT.Player('audHost',{videoId:id,width:220,height:124,playerVars:Object.assign({controls:1,fs:0,disablekb:1},base),events:{
+  ap=new YT.Player('audHost',{videoId:id,width:220,height:124,playerVars:Object.assign({controls:0,fs:0,disablekb:1},base),events:{
     onReady:()=>{aReady=true; ap.setVolume(volume); ap.unMute();},
     onStateChange:e=>{ if(e.data===1){ audioOk=true; hideUnlock(); } }
   }});
@@ -231,8 +233,8 @@ function tick(force){
       if(as!==1 && as!==3){ if(now-lastSeekAt>1500){ ap.seekTo(tgt+lead,true); lastSeekAt=now; } ap.playVideo(); }
       else if(as===1){
         drift=ap.getCurrentTime()-tgt;
-        if(justSeeked && now-lastSeekAt>1200){ lead=Math.max(0,Math.min(1.5,lead-drift)); justSeeked=false; }
-        const gap=Math.abs(drift)>2?1000:4000;
+        if(justSeeked && now-lastSeekAt>1500){ if(Math.abs(drift)<0.6) lead=Math.max(0,Math.min(0.5,lead-drift*0.5)); justSeeked=false; }
+        const gap=Math.abs(drift)>0.6?1500:4000;
         if((Math.abs(drift)>0.15||force) && now-lastSeekAt>gap){ ap.seekTo(tgt+lead,true); lastSeekAt=now; justSeeked=true; }
       }
       if(as===1){ state='Synced'; cls='ok'; } else { state='Loading audio'; cls='warn'; }
@@ -304,6 +306,7 @@ document.addEventListener('keydown',e=>{
 
 /* init */
 const q=new URLSearchParams(location.search); const last=store.get('sp_last');
+urlDelay=q.has('d')?parseFloat(q.get('d')):null;
 setDelay(q.has('d')?+q.get('d'):(last!==null?+last:0),false);
 const qid=parseId(q.get('v')||''); if(qid){ $('ytUrl').value='https://youtu.be/'+qid; loadYt(qid); }
 ensureApi();
