@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="hi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d0f14">
+<title>SyncPlay – Audio Delay Fix</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap">
+<style>
+:root{
+  --bg:#0d0f14; --panel:#161a22; --panel2:#1e2330; --line:#2a3040;
+  --fg:#eef1f7; --mut:#8b93a7; --acc:#4fd1c5; --acc2:#f6ad55; --bad:#fc8181;
+  --r:14px; --body:'Inter',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  --disp:'Space Grotesk','Inter',system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--body);-webkit-tap-highlight-color:transparent}
+body{padding:env(safe-area-inset-top,0) max(14px,env(safe-area-inset-right,0)) env(safe-area-inset-bottom,0) max(14px,env(safe-area-inset-left,0))}
+.wrap{max-width:980px;margin:0 auto;padding-block:14px 40px;display:flex;flex-direction:column;gap:14px}
+header{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.logo{font-family:var(--disp);font-weight:700;font-size:22px;letter-spacing:-.02em;display:flex;align-items:center;gap:8px}
+.logo b{color:var(--acc)}
+.logo .dot{width:10px;height:10px;border-radius:50%;background:var(--acc);box-shadow:16px 0 0 var(--acc2);margin-right:16px}
+.tabs{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:3px}
+.tabs button{border:0;background:none;color:var(--mut);font:600 13px var(--body);padding:7px 14px;border-radius:999px;cursor:pointer}
+.tabs button.on{background:var(--panel2);color:var(--fg)}
+.load{display:flex;gap:8px}
+.load input[type=text]{flex:1;min-width:0;background:var(--panel);border:1px solid var(--line);color:var(--fg);font:15px var(--body);padding:13px 14px;border-radius:var(--r);outline:none}
+.load input[type=text]:focus{border-color:var(--acc)}
+.btn{border:0;background:var(--acc);color:#06201d;font:700 15px var(--body);padding:0 18px;border-radius:var(--r);cursor:pointer;white-space:nowrap}
+.btn.ghost{background:var(--panel2);color:var(--fg);border:1px solid var(--line)}
+.filebox{display:flex;gap:8px;align-items:center}
+.filebox label{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;min-height:48px;border:1.5px dashed var(--line);border-radius:var(--r);color:var(--mut);cursor:pointer;font-weight:600;padding:8px;text-align:center}
+.filebox input{display:none}
+
+/* player */
+.stage{position:relative;background:#000;border-radius:var(--r);overflow:hidden;aspect-ratio:16/9;width:100%;user-select:none}
+.stage iframe, .stage video{position:absolute;inset:0;width:100%;height:100%;border:0;pointer-events:none}
+.stage video{object-fit:contain}
+.stage .tap{position:absolute;inset:0;z-index:2}
+.empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--mut);padding:20px;font-size:14px;line-height:1.5;z-index:1}
+.empty strong{display:block;color:var(--fg);font-family:var(--disp);font-size:20px;margin-bottom:6px}
+.badge{position:absolute;top:10px;left:10px;z-index:3;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);padding:5px 10px;border-radius:999px;font:600 12px var(--body);color:var(--acc);pointer-events:none}
+.bigplay{position:absolute;inset:0;margin:auto;width:74px;height:74px;border-radius:50%;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);border:0;color:#fff;z-index:3;display:grid;place-items:center;cursor:pointer;transition:opacity .2s}
+.bigplay svg{width:34px;height:34px}
+.stage.playing .bigplay{opacity:0;pointer-events:none}
+.ovctl{position:absolute;left:0;right:0;bottom:0;z-index:4;padding:30px 12px 10px;background:linear-gradient(transparent,rgba(0,0,0,.8));display:flex;flex-direction:column;gap:6px;transition:opacity .25s}
+.stage.playing.idle .ovctl{opacity:0}
+.stage.playing.idle{cursor:none}
+.row{display:flex;align-items:center;gap:6px}
+.ib{border:0;background:none;color:#fff;width:40px;height:40px;display:grid;place-items:center;border-radius:10px;cursor:pointer;flex:none}
+.ib:hover{background:rgba(255,255,255,.12)}
+.ib svg{width:24px;height:24px}
+.time{font:500 13px var(--body);font-variant-numeric:tabular-nums;color:#dfe3ea;white-space:nowrap}
+.sp{flex:1}
+input[type=range]{-webkit-appearance:none;appearance:none;background:transparent;width:100%;height:24px;cursor:pointer;margin:0}
+input[type=range]::-webkit-slider-runnable-track{height:5px;border-radius:5px;background:linear-gradient(90deg,var(--acc) var(--p,0%),rgba(255,255,255,.25) var(--p,0%))}
+input[type=range]::-moz-range-track{height:5px;border-radius:5px;background:rgba(255,255,255,.25)}
+input[type=range]::-moz-range-progress{height:5px;border-radius:5px;background:var(--acc)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;background:#fff;margin-top:-5px;border:0}
+input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:#fff;border:0}
+.vol{width:80px}
+select.speed{background:rgba(255,255,255,.12);color:#fff;border:0;border-radius:8px;font:600 12px var(--body);padding:6px 4px}
+select.speed option{color:#000}
+
+/* fullscreen-ish */
+.stage.fs{position:fixed;inset:0;z-index:50;border-radius:0;aspect-ratio:auto;width:100vw;height:100vh;height:100dvh}
+.fsdelay{display:none;position:absolute;top:10px;right:10px;z-index:5;gap:4px;align-items:center;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);border-radius:999px;padding:4px}
+.stage.fs .fsdelay,.stage:fullscreen .fsdelay{display:flex}
+.stage.playing.idle .fsdelay{opacity:0}
+.fsdelay button{border:0;background:rgba(255,255,255,.12);color:#fff;font:700 12px var(--body);border-radius:999px;padding:6px 9px;cursor:pointer}
+.fsdelay span{font:700 13px var(--body);color:var(--acc);min-width:54px;text-align:center;font-variant-numeric:tabular-nums}
+
+/* delay panel */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:12px}
+.ptop{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ptop h2{margin:0;font:700 15px var(--disp);letter-spacing:.02em;text-transform:uppercase;color:var(--mut)}
+.big{font:700 44px/1 var(--disp);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.big small{font-size:18px;color:var(--mut);margin-left:4px}
+.hint{font-size:13px;color:var(--mut);line-height:1.45}
+.hint b{color:var(--fg)}
+.dslider{--p:50%}
+.dslider::-webkit-slider-runnable-track{background:linear-gradient(90deg,var(--acc2) 0%,var(--acc2) 50%,var(--acc) 50%,var(--acc) 100%)!important;opacity:.85}
+.ticks{display:flex;justify-content:space-between;font:500 11px var(--body);color:var(--mut);font-variant-numeric:tabular-nums;margin-top:-4px}
+.steps{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.steps button,.presets button{border:1px solid var(--line);background:var(--panel2);color:var(--fg);font:700 14px var(--body);padding:11px 0;border-radius:10px;cursor:pointer;font-variant-numeric:tabular-nums}
+.steps button:active,.presets button:active{transform:scale(.96)}
+.presets{display:flex;flex-wrap:wrap;gap:6px}
+.presets button{padding:8px 12px;font-size:13px;font-weight:600}
+.presets button.on{border-color:var(--acc);color:var(--acc)}
+.dir{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.dir div{background:var(--panel2);border-radius:10px;padding:10px;font-size:12.5px;color:var(--mut);line-height:1.4}
+.dir div b{display:block;font-size:13px;margin-bottom:2px}
+.dir .a b{color:var(--acc)} .dir .v b{color:var(--acc2)}
+.status{font-size:12.5px;color:var(--mut);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pill{padding:3px 9px;border-radius:999px;background:var(--panel2);font-weight:600}
+.pill.ok{color:var(--acc)} .pill.warn{color:var(--acc2)} .pill.bad{color:var(--bad)}
+.unlock{display:none;background:#2a2210;border:1px solid #6b5520;color:#f6d38b;border-radius:var(--r);padding:12px;font-size:13.5px;line-height:1.45;gap:10px;flex-direction:column}
+.unlock.show{display:flex}
+.unlock .ah{position:relative;width:240px;max-width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:#000}
+details{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px 16px}
+summary{cursor:pointer;font-weight:600}
+details p,details li{color:var(--mut);font-size:13.5px;line-height:1.55}
+details code{background:var(--panel2);padding:1px 6px;border-radius:5px;color:var(--fg)}
+kbd{background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:0 5px;font-size:12px;color:var(--fg)}
+#audioHost{position:fixed;left:0;bottom:0;width:220px;height:124px;opacity:.01;pointer-events:none;z-index:-1;overflow:hidden}
+#audioHost.reveal{position:static;opacity:1;pointer-events:auto;z-index:auto;width:100%;height:100%}
+@media (max-width:560px){
+  .big{font-size:36px}
+  .vol,.hideS{display:none}
+  .steps button{font-size:13px;padding:10px 0}
+  .ib{width:36px;height:36px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo"><span class="dot"></span>Sync<b>Play</b></div>
+    <div class="tabs" role="tablist">
+      <button id="tabYt" class="on">YouTube</button>
+      <button id="tabFile">File / URL</button>
+    </div>
+  </header>
+
+  <form class="load" id="ytForm">
+    <input type="text" id="ytUrl" placeholder="YouTube link paste karo…" autocomplete="off" inputmode="url">
+    <button class="btn" type="submit">Play</button>
+  </form>
+  <div class="filebox" id="fileForm" hidden>
+    <label for="fileIn">📁 Video file choose karo (phone / PC)</label>
+    <input type="file" id="fileIn" accept="video/*,audio/*,.mkv">
+    <button class="btn ghost" id="urlBtn" type="button">MP4 link</button>
+  </div>
+
+  <div class="stage" id="stage">
+    <div class="empty" id="empty"><div><strong>Link daalo, play karo</strong>Audio aage-peeche ho to neeche se delay set karo.<br>Phone pe bhi chalega.</div></div>
+    <div class="vid" id="vidHost"></div>
+    <video id="fv" playsinline muted hidden></video>
+    <div class="tap" id="tap"></div>
+    <div class="badge" id="badge" hidden>Audio +0.0s</div>
+    <div class="fsdelay">
+      <button data-d="-1">−1</button><button data-d="-0.1">−.1</button>
+      <span id="fsVal">0.0s</span>
+      <button data-d="0.1">+.1</button><button data-d="1">+1</button>
+    </div>
+    <button class="bigplay" id="bigplay" aria-label="Play"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
+    <div class="ovctl">
+      <input type="range" id="seek" min="0" max="1000" value="0" aria-label="Seek">
+      <div class="row">
+        <button class="ib" id="playBtn" aria-label="Play/Pause"><svg viewBox="0 0 24 24" fill="currentColor" id="playIco"><path d="M8 5v14l11-7z"/></svg></button>
+        <button class="ib" id="back" aria-label="10s peeche"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 17l-5-5 5-5M18 17l-5-5 5-5"/></svg></button>
+        <button class="ib" id="fwd" aria-label="10s aage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 17l5-5-5-5M6 17l5-5-5-5"/></svg></button>
+        <span class="time" id="time">0:00 / 0:00</span>
+        <span class="sp"></span>
+        <button class="ib" id="muteBtn" aria-label="Mute"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 10v4h4l5 5V5L7 10H3zm13.5 2A4.5 4.5 0 0014 8v8a4.5 4.5 0 002.5-4z"/></svg></button>
+        <input type="range" class="vol" id="vol" min="0" max="100" value="100" aria-label="Volume" style="--p:100%">
+        <select class="speed" id="speed" aria-label="Speed">
+          <option>0.5</option><option>0.75</option><option selected>1</option><option>1.25</option><option>1.5</option><option>2</option>
+        </select>
+        <button class="ib" id="fsBtn" aria-label="Fullscreen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="unlock" id="unlock">
+    <div><b>Phone pe sound start karna hai:</b> neeche wale chhote player pe ek baar ▶ tap karo. Uske baad sab auto sync ho jayega.</div>
+    <div class="ah" id="audioSlot"></div>
+    <button class="btn ghost" id="unlockDone" type="button" style="min-height:40px">Ho gaya</button>
+  </div>
+
+  <section class="panel" aria-label="Audio delay">
+    <div class="ptop">
+      <div>
+        <h2>Audio Delay</h2>
+        <div class="big"><span id="dVal">0.0</span><small>sec</small></div>
+      </div>
+      <div class="status"><span class="pill" id="syncPill">Idle</span><span id="driftTxt"></span></div>
+    </div>
+    <div>
+      <input type="range" class="dslider" id="dSlider" min="-20" max="20" step="0.1" value="0" aria-label="Audio delay seconds">
+      <div class="ticks"><span>−20</span><span>−10</span><span>0</span><span>+10</span><span>+20</span></div>
+    </div>
+    <div class="steps">
+      <button data-d="-1">−1s</button><button data-d="-0.5">−0.5</button><button data-d="-0.1">−0.1</button>
+      <button data-d="0.1">+0.1</button><button data-d="0.5">+0.5</button><button data-d="1">+1s</button>
+    </div>
+    <div class="presets" id="presets">
+      <button data-v="0">Reset 0</button><button data-v="3">+3s</button><button data-v="5">+5s</button><button data-v="7">+7s</button><button data-v="10">+10s</button><button data-v="-5">−5s</button>
+    </div>
+    <div class="dir">
+      <div class="a"><b>+ (plus) value</b>Awaaz pehle aa rahi hai, video peeche. Audio ko rok ke late chalata hai.</div>
+      <div class="v"><b>− (minus) value</b>Video pehle, awaaz late. Audio ko aage kar deta hai.</div>
+    </div>
+    <div class="hint">Tip: kisi ke <b>hoth (lips)</b> dekho, ya taali / darwaza band hone ki awaaz. Pehle <b>+5</b> ya <b>+10</b> try karo, phir <b>±0.1</b> se fine-tune. Setting har video ke liye yaad rahegi.</div>
+  </section>
+
+  <details>
+    <summary>Kaise kaam karta hai + shortcuts</summary>
+    <p>YouTube mode me 2 player chalte hain: ek <b>video</b> dikhata hai (mute), dusra chhupa hua sirf <b>awaaz</b> deta hai, aapke set kiye delay ke saath. Har second check karke dono ko sync rakhta hai. File mode me apni video file ya direct .mp4 link chala sakte ho.</p>
+    <p>Keyboard: <kbd>Space</kbd> play/pause · <kbd>←</kbd><kbd>→</kbd> 5s seek · <kbd>[</kbd><kbd>]</kbd> delay ±0.1 · <kbd>Shift</kbd>+<kbd>[</kbd><kbd>]</kbd> ±1s · <kbd>F</kbd> fullscreen</p>
+    <p>Share link: page ka address copy karo, usme video aur delay dono save rehte hain.</p>
+    <p>YouTube.com par hi direct chahiye (PC / Android Kiwi / Firefox + Tampermonkey)? <a href="yt-audio-delay.user.js" style="color:var(--acc)">Userscript install karo</a> — YouTube ke player me hi “Audio Delay” button aa jayega.</p>
+  </details>
+</div>
+
+<div id="audioHost"><div id="audHost"></div></div>
+<video id="fa" playsinline hidden></video>
+
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const stage=$('stage'), seek=$('seek'), dSlider=$('dSlider');
+let mode='yt';            // 'yt' | 'file'
+let delay=0;              // + = audio plays later than video
+let vidKey='';
+let wantPlay=false, vReady=false, aReady=false, vp=null, ap=null, apiReady=false, pendingId=null;
+let audioUnlocked=false, unlockTimer=null, waitingAudio=false, seeking=false;
+let volume=100, muted=false, rate=1;
+
+/* ---------- helpers ---------- */
+const fmt=s=>{ if(!isFinite(s)||s<0) s=0; s=Math.floor(s); const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60; return (h?h+':'+String(m).padStart(2,'0'):m)+':'+String(x).padStart(2,'0'); };
+const parseId=u=>{ u=(u||'').trim(); if(/^[\w-]{11}$/.test(u)) return u;
+  const m=u.match(/(?:youtu\.be\/|v=|\/embed\/|\/shorts\/|\/live\/|\/v\/)([\w-]{11})/); return m?m[1]:null; };
+const store={ get(k){try{return localStorage.getItem(k)}catch(e){return null}}, set(k,v){try{localStorage.setItem(k,v)}catch(e){}} };
+
+function setDelay(v, save=true){
+  v=Math.max(-20,Math.min(20,Math.round(v*10)/10)); delay=v;
+  const t=(v>0?'+':'')+v.toFixed(1);
+  $('dVal').textContent=t; $('fsVal').textContent=t+'s';
+  $('badge').textContent='Audio '+t+'s'; $('badge').hidden=!(vReady||mode==='file'&&$('fv').src);
+  dSlider.value=v;
+  document.querySelectorAll('#presets button').forEach(b=>b.classList.toggle('on',+b.dataset.v===v));
+  if(save && vidKey) store.set('sp_d_'+vidKey, v);
+  if(save) store.set('sp_last', v);
+  updateUrl(); forceResync();
+}
+function updateUrl(){
+  if(mode!=='yt'||!vidKey) return;
+  const p=new URLSearchParams(); p.set('v',vidKey); if(delay) p.set('d',delay);
+  try{ history.replaceState(null,'','?'+p.toString()); }catch(e){}
+}
+
+/* ---------- YouTube mode ---------- */
+window.onYouTubeIframeAPIReady=()=>{ apiReady=true; if(pendingId) loadYt(pendingId); };
+function ensureApi(){ if(document.getElementById('ytapi')) return; const s=document.createElement('script'); s.id='ytapi'; s.src='https://www.youtube.com/iframe_api'; document.head.appendChild(s); }
+
+function loadYt(id){
+  if(!apiReady){ pendingId=id; ensureApi(); return; }
+  pendingId=null; vidKey=id; wantPlay=false; vReady=aReady=false; audioUnlocked=false;
+  $('empty').hidden=true; stage.classList.remove('playing');
+  const saved=store.get('sp_d_'+id); if(saved!==null) setDelay(+saved,false); else setDelay(delay,false);
+  updateUrl();
+  if(vp&&vp.loadVideoById){ vp.cueVideoById(id); ap.cueVideoById(id); vReady=aReady=true; return; }
+  const vars={playsinline:1,controls:0,rel:0,disablekb:1,fs:0,iv_load_policy:3,modestbranding:1,origin:location.origin};
+  vp=new YT.Player('vidHost',{videoId:id,playerVars:vars,events:{
+    onReady:()=>{vReady=true; vp.mute(); setDelay(delay,false);},
+    onStateChange:onVState }});
+  ap=new YT.Player('audHost',{videoId:id,width:220,height:124,playerVars:{playsinline:1,controls:1,rel:0,disablekb:1,fs:0,iv_load_policy:3,origin:location.origin},events:{
+    onReady:()=>{aReady=true; ap.setVolume(volume); muted?ap.mute():ap.unMute();},
+    onStateChange:e=>{ if(e.data===1){ audioUnlocked=true; hideUnlock(); } } }});
+}
+function onVState(e){
+  if(e.data===0){ wantPlay=false; ap&&ap.pauseVideo(); }
+  refreshPlayIcon();
+}
+
+/* ---------- File mode ---------- */
+const fv=$('fv'), fa=$('fa');
+function loadFile(src){
+  mode='file'; vidKey=''; wantPlay=false;
+  $('empty').hidden=true; fv.hidden=false; fv.src=src; fa.src=src; fv.muted=true; fa.volume=volume/100; fa.muted=muted;
+  fv.playbackRate=fa.playbackRate=rate;
+  const last=store.get('sp_last'); setDelay(last!==null?+last:delay,false);
+  fv.onended=()=>{wantPlay=false; fa.pause(); refreshPlayIcon();};
+}
+
+/* ---------- unified API ---------- */
+const P={
+  t(){ return mode==='yt' ? (vReady&&vp.getCurrentTime?vp.getCurrentTime():0) : fv.currentTime||0; },
+  dur(){ return mode==='yt' ? (vReady&&vp.getDuration?vp.getDuration():0) : (fv.duration||0); },
+  seek(t){ t=Math.max(0,Math.min(this.dur()||t,t));
+    if(mode==='yt'){ vReady&&vp.seekTo(t,true); } else fv.currentTime=t; forceResync(); },
+  ok(){ return mode==='yt' ? vReady : !!fv.src; }
+};
+
+function play(){
+  if(!P.ok()) return;
+  wantPlay=true;
+  if(mode==='yt'){
+    vp.playVideo();
+    const tgt=P.t()-delay;
+    if(aReady && tgt>=0){ ap.seekTo(tgt,true); ap.playVideo(); }
+    clearTimeout(unlockTimer);
+    unlockTimer=setTimeout(()=>{ if(wantPlay && !audioUnlocked && P.t()-delay>0.5 && ap.getPlayerState()!==1) showUnlock(); },2500);
+  } else {
+    fv.play().catch(()=>{});
+    const tgt=fv.currentTime-delay;
+    if(tgt>=0){ fa.currentTime=tgt; fa.play().catch(()=>{}); }
+  }
+  stage.classList.add('playing'); poke(); refreshPlayIcon();
+}
+function pause(){
+  wantPlay=false; waitingAudio=false;
+  if(mode==='yt'){ vReady&&vp.pauseVideo(); aReady&&ap.pauseVideo(); }
+  else { fv.pause(); fa.pause(); }
+  stage.classList.remove('playing'); refreshPlayIcon();
+}
+const toggle=()=> wantPlay?pause():play();
+
+/* ---------- sync loop ---------- */
+let lastSeekAt=0;
+function forceResync(){ lastSeekAt=0; syncTick(true); }
+function syncTick(force){
+  if(!P.ok()) return;
+  const T=P.t(), tgt=T-delay, D=P.dur();
+  let drift=null, state='Idle', cls='';
+  if(mode==='yt'){
+    if(!aReady) return;
+    const as=ap.getPlayerState(), vs=vp.getPlayerState();
+    const aT=ap.getCurrentTime();
+    if(!wantPlay){ if(as===1) ap.pauseVideo(); state='Paused'; }
+    else if(tgt<0 || (D&&tgt>D)){ if(as===1) ap.pauseVideo(); state= tgt<0?'Audio waiting '+(-tgt).toFixed(1)+'s':'Audio ended'; cls='warn'; }
+    else{
+      if(as===3 && vs===1){ vp.pauseVideo(); waitingAudio=true; }
+      if(waitingAudio && as===1){ vp.playVideo(); waitingAudio=false; }
+      if(vs===2 && wantPlay && !waitingAudio) vp.playVideo();
+      if(vs===3){ if(as===1) ap.pauseVideo(); }
+      else if(as!==1 && as!==3){ ap.seekTo(tgt,true); ap.playVideo(); }
+      else if(as===1){
+        drift=aT-tgt;
+        const now=performance.now();
+        if((Math.abs(drift)>0.3 || force) && now-lastSeekAt>1200){ ap.seekTo(tgt+0.05,true); lastSeekAt=now; }
+      }
+      state= as===1&&vs===1?'Synced':'Buffering…'; cls= as===1&&vs===1?'ok':'warn';
+      if(!audioUnlocked && as!==1 && as!==3){ state='Sound blocked'; cls='bad'; }
+    }
+  } else {
+    if(!wantPlay){ if(!fa.paused) fa.pause(); state='Paused'; }
+    else if(tgt<0 || (D&&tgt>D)){ if(!fa.paused) fa.pause(); state=tgt<0?'Audio waiting '+(-tgt).toFixed(1)+'s':'Audio ended'; cls='warn'; }
+    else{
+      if(fa.paused){ fa.currentTime=tgt; fa.play().catch(()=>{}); }
+      drift=fa.currentTime-tgt;
+      if(Math.abs(drift)>0.12 || force){ fa.currentTime=tgt; fa.playbackRate=rate; }
+      else fa.playbackRate=rate*(1-Math.max(-0.05,Math.min(0.05,drift))); // gentle nudge
+      if(fv.paused) fv.play().catch(()=>{});
+      state='Synced'; cls='ok';
+    }
+  }
+  const pill=$('syncPill'); pill.textContent=state; pill.className='pill '+cls;
+  $('driftTxt').textContent= drift!==null? 'drift '+(drift*1000|0)+' ms':'';
+}
+setInterval(()=>syncTick(false),400);
+
+/* ---------- UI updates ---------- */
+function refreshPlayIcon(){
+  $('playIco').innerHTML= wantPlay?'<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>':'<path d="M8 5v14l11-7z"/>';
+}
+setInterval(()=>{
+  if(!P.ok()) return;
+  const t=P.t(), d=P.dur();
+  if(!seeking && d){ seek.value=t/d*1000; seek.style.setProperty('--p',(t/d*100)+'%'); }
+  $('time').textContent=fmt(t)+' / '+fmt(d);
+},250);
+
+/* idle hide controls */
+let idleT; function poke(){ stage.classList.remove('idle'); clearTimeout(idleT); idleT=setTimeout(()=>stage.classList.add('idle'),2800); }
+stage.addEventListener('mousemove',poke); stage.addEventListener('touchstart',poke,{passive:true});
+
+/* tap: single = show controls / toggle, double side = seek */
+let lastTap=0;
+$('tap').addEventListener('click',e=>{
+  const now=Date.now(), r=stage.getBoundingClientRect(), x=(e.clientX-r.left)/r.width;
+  if(now-lastTap<300){ if(x<.35) P.seek(P.t()-10); else if(x>.65) P.seek(P.t()+10); lastTap=0; return; }
+  lastTap=now;
+  const wasIdle=stage.classList.contains('idle');
+  setTimeout(()=>{ if(lastTap===now){ if(wasIdle && ('ontouchstart' in window)) poke(); else toggle(); } },260);
+});
+$('bigplay').onclick=play; $('playBtn').onclick=toggle;
+$('back').onclick=()=>P.seek(P.t()-10); $('fwd').onclick=()=>P.seek(P.t()+10);
+
+seek.addEventListener('input',()=>{ seeking=true; seek.style.setProperty('--p',(seek.value/10)+'%'); $('time').textContent=fmt(seek.value/1000*P.dur())+' / '+fmt(P.dur()); });
+seek.addEventListener('change',()=>{ P.seek(seek.value/1000*P.dur()); seeking=false; });
+
+function applyVol(){
+  $('vol').value=muted?0:volume; $('vol').style.setProperty('--p',(muted?0:volume)+'%');
+  if(mode==='yt'&&aReady){ ap.setVolume(volume); muted?ap.mute():ap.unMute(); }
+  fa.volume=volume/100; fa.muted=muted;
+}
+$('vol').oninput=e=>{ volume=+e.target.value; muted=volume===0; applyVol(); };
+$('muteBtn').onclick=()=>{ muted=!muted; if(!muted&&!volume) volume=80; applyVol(); };
+$('speed').onchange=e=>{ rate=+e.target.value; if(mode==='yt'){ vReady&&vp.setPlaybackRate(rate); aReady&&ap.setPlaybackRate(rate);} else { fv.playbackRate=fa.playbackRate=rate; } forceResync(); };
+
+/* fullscreen with iPhone fallback */
+function toggleFs(){
+  const inFs=document.fullscreenElement||document.webkitFullscreenElement||stage.classList.contains('fs');
+  if(inFs){
+    if(document.fullscreenElement) document.exitFullscreen(); else if(document.webkitFullscreenElement) document.webkitExitFullscreen();
+    stage.classList.remove('fs'); return;
+  }
+  const req=stage.requestFullscreen||stage.webkitRequestFullscreen;
+  if(req){ Promise.resolve(req.call(stage)).then(()=>{ try{screen.orientation.lock('landscape').catch(()=>{})}catch(e){} }).catch(()=>stage.classList.add('fs')); }
+  else stage.classList.add('fs');
+}
+$('fsBtn').onclick=toggleFs;
+
+/* delay controls */
+dSlider.addEventListener('input',()=>setDelay(+dSlider.value));
+document.querySelectorAll('[data-d]').forEach(b=>b.addEventListener('click',e=>{ e.stopPropagation(); setDelay(delay+ +b.dataset.d); poke(); }));
+document.querySelectorAll('[data-v]').forEach(b=>b.addEventListener('click',()=>setDelay(+b.dataset.v)));
+
+/* unlock (mobile autoplay policy) */
+const audioHost=$('audioHost');
+function showUnlock(){ $('unlock').classList.add('show'); $('audioSlot').appendChild(audioHost); audioHost.classList.add('reveal'); }
+function hideUnlock(){ if(!$('unlock').classList.contains('show')) return; $('unlock').classList.remove('show'); audioHost.classList.remove('reveal'); document.body.appendChild(audioHost); }
+$('unlockDone').onclick=()=>{ audioUnlocked=true; hideUnlock(); forceResync(); };
+
+/* tabs / loading */
+function setTab(t){
+  $('tabYt').classList.toggle('on',t==='yt'); $('tabFile').classList.toggle('on',t==='file');
+  $('ytForm').hidden=t!=='yt'; $('fileForm').hidden=t!=='file';
+}
+$('tabYt').onclick=()=>setTab('yt'); $('tabFile').onclick=()=>setTab('file');
+$('ytForm').addEventListener('submit',e=>{
+  e.preventDefault(); const raw=$('ytUrl').value.trim(); const id=parseId(raw);
+  if(!id && /^https?:\/\//.test(raw)){ if(mode==='yt') pause(); loadFile(raw); $('ytUrl').blur(); return; }
+  if(!id){ $('ytUrl').style.borderColor='var(--bad)'; $('ytUrl').value=''; $('ytUrl').placeholder='Ye YouTube link sahi nahi lag raha, dobara paste karo'; return; }
+  $('ytUrl').style.borderColor='';
+  if(mode==='file'){ pause(); fv.removeAttribute('src'); fv.load(); fa.removeAttribute('src'); fv.hidden=true; }
+  mode='yt'; loadYt(id); $('ytUrl').blur();
+});
+$('fileIn').onchange=e=>{ const f=e.target.files[0]; if(!f) return; if(mode==='yt'){ pause(); } loadFile(URL.createObjectURL(f)); $('fileForm').querySelector('label').textContent='▶ '+f.name; };
+$('urlBtn').onclick=()=>{
+  const box=$('ytUrl'); setTab('yt'); box.value=''; box.placeholder='Direct .mp4 link paste karke Play dabao'; box.focus();
+};
+
+/* keyboard */
+document.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'&&e.target.type==='text') return;
+  const k=e.key;
+  if(k===' '||k==='k'){ e.preventDefault(); toggle(); }
+  else if(k==='ArrowLeft'){ e.preventDefault(); P.seek(P.t()-5); }
+  else if(k==='ArrowRight'){ e.preventDefault(); P.seek(P.t()+5); }
+  else if(k==='['||k==='{') setDelay(delay-(e.shiftKey||k==='{'?1:0.1));
+  else if(k===']'||k==='}') setDelay(delay+(e.shiftKey||k==='}'?1:0.1));
+  else if(k==='f') toggleFs();
+  else if(k==='Escape') stage.classList.remove('fs');
+  poke();
+});
+
+/* init from URL */
+const q=new URLSearchParams(location.search);
+const last=store.get('sp_last'); setDelay(q.has('d')?+q.get('d'):(last!==null?+last:0),false);
+if(q.get('v')){ const id=parseId(q.get('v')); if(id){ $('ytUrl').value='https://youtu.be/'+id; mode='yt'; loadYt(id); } }
+ensureApi();
+})();
+</script>
+</body>
+</html>
